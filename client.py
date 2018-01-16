@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import json
 import socket
 import threading
 import tkinter as tk
@@ -20,6 +21,7 @@ class Application(tk.Frame):
         self.message = tk.StringVar()
         self.connect_string = tk.StringVar()
         self.connect_string.set("127.0.0.1:8888")
+        self.channel = "lobby"
         self.create_widgets()
         self.running = False
         self.pack()
@@ -32,10 +34,10 @@ class Application(tk.Frame):
         self.connect_button.grid(column=1, row=0, sticky='E')
         self.scroll = scrolledtext.ScrolledText(self, width=80, height=25)
         self.scroll.grid(column=0, row=1, sticky='W')
-        self.button = tk.Button(self, text='Send', command=self.send)
+        self.button = tk.Button(self, text='Send', command=self.sendMessage)
         self.button.grid(column=1, row=2, sticky='E')
         self.entry = tk.Entry(self, width=80, textvariable=self.message)
-        self.entry.bind('<Return>', self.send)
+        self.entry.bind('<Return>', self.sendMessage)
         self.entry.focus()
         self.entry.grid(column=0, row=2, sticky='W')
 
@@ -43,16 +45,47 @@ class Application(tk.Frame):
         self.running = False
         root.destroy()
 
-    def send(self, event=None):
-        self.socket.send(str(self.message.get()).encode('UTF-8') + b'\n')
+    def sendMessage(self, event=None):
+        json_string = self.encodeJSON(self.message.get())
+        self.socket.send(json_string)
         self.message.set("")
+
+    def encodeJSON(self, msg):
+        json_object = {}
+        if msg.startswith('/'):
+            json_object['type'] = "command"
+            json_object['command'] = msg.split()[0][1:]
+            if json_object['command'] == "name":
+               json_object['data'] = " ".join(msg.split()[1:])
+        else:
+            json_object['type'] = "message"
+            json_object['target'] = "channel"
+            json_object['channel'] = self.channel
+            json_object['message'] = msg
+        return json.dumps(json_object).encode('UTF-8')
+
+    def decodeJSON(self, json_object):
+        if json_object['type'] == "message":
+            self.updateScrolledText(json_object)
+        elif json_object['type'] == "command":
+            self.executeCommand(json_object)
+        else:
+            self.scroll.insert(tk.END, "ERROR: Cannot decode JSON!")
+
+    def updateScrolledText(self, json_object):
+        self.scroll.insert(tk.END, "{}: {}\n".format(json_object['sender'],json_object['message']))
+
+    def executeCommand(self, json_object):
+        if json_object['command'] == "name" and 'error' not in json_object:
+            self.scroll.insert(tk.END, "Name sucessfully changed to {}\n".format(json_object['data']))
 
     def handleConnection(self):
         while self.running:
             rlist, _, _ = select([self.socket], [],[], 1)
             for socket in rlist:
                 data = socket.recv(defaults['bufsize'])
-                self.scroll.insert(tk.END, data)
+                json_object = json.loads(data, encoding='UTF-8')
+                self.decodeJSON(json_object)
 
     def connect(self, event=None):
         if not self.running: 
