@@ -60,6 +60,7 @@ class ChatServer:
 #                                    self.clients.remove(client)
 
     def sendMessage(self, client, json_object):
+        json_object['sender'] = client.name
         if json_object['target'] == 'channel':
             to_send = [ client for client in self.clients if json_object['channel'] in client.channels ]
         elif json_object['target'] == 'direct':
