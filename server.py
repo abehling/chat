@@ -32,7 +32,7 @@ class ChatServer:
         while True:
             new_connection = self.server_socket.accept()
             log.info("Connection from {}".format(new_connection[1]))
-            self.clients.append(Client(new_connection[0], uuid.uuid1()))
+            self.clients.append(Client(new_connection[0], str(uuid.uuid1())))
 
     def handleClients(self):
         while True:
