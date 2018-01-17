@@ -32,7 +32,9 @@ class ChatServer:
         while True:
             new_connection = self.server_socket.accept()
             log.info("Connection from {}".format(new_connection[1]))
-            self.clients.append(Client(new_connection[0], str(uuid.uuid1())))
+            client = Client(new_connection[0], str(uuid.uuid1()))
+            self.clients.append(client)
+            self.updateChannellist(client)
 
     def handleClients(self):
         while True:
@@ -45,24 +47,14 @@ class ChatServer:
                             json_object = json.loads(message, encoding='UTF-8')
                             self.decodeJSON(client, json_object)
                         except (json.decoder.JSONDecodeError, UnicodeDecodeError):
-                            log.warning("Client sent unspecific data... Disconnecting and removing...")
+                            log.error("Client sent unspecific data... Disconnecting and removing...")
                             client.socket.close()
                             self.clients.remove(client)
-#                        if message.startswith('/'):
-#                            self.executeCommand(client, message)
-#                        else:
-#                            sender = client.name
-#                            for client in self.clients:
-#                                try:
-#                                    client.sendMessage(sender + ': ' + message)
-#                                except (BrokenPipeError, ConnectionResetError):
-#                                    log.warning("Client {} has gone down... Removing...".format(client.name))
-#                                    self.clients.remove(client)
 
     def sendMessage(self, client, json_object):
         json_object['sender'] = client.name
         if json_object['target'] == 'channel':
-            to_send = [ client for client in self.clients if json_object['channel'] in client.channels ]
+            to_send = [ client for client in self.clients if json_object['channel'] == client.channel ]
         elif json_object['target'] == 'direct':
             to_send = [ client for client in self.clients if json_object['direct'] in client.name ]
         for client in to_send:
@@ -82,18 +74,28 @@ class ChatServer:
             log.error("No valid meesage type! Ignoring...")
 
     def executeCommand(self, client, json_object):
-        log.info("Received Command: {} from {}".format(json_object['command'], client.name))
+        log.debug("Received Command: {} from {}".format(json_object['command'], client.name))
         if json_object['command'] == 'name':
             if " " not in json_object['data']:
                 client.setName(json_object['data'])
                 client.sendMessage(json_object)
+                self.updateChannellist(client)
             else:
                 json_object['error'] = "Error! Name could not be set!"
                 client.sendMessage(json_object)
+        elif json_object['command'] == 'list':
+            json_object['list'] = [ c.name for c in self.clients if client.channel == c.channel ]
+            client.sendMessage(json_object)
+
+    def updateChannellist(self, client):
+        for c in self.clients:
+            if c.channel == client.channel:
+                self.executeCommand(c, {'type': 'command', 'command': 'list'})
 
     def serveForever(self):
         threading.Thread(target=self.handleConnection).start()
         threading.Thread(target=self.handleClients).start()
+
 
 class Client:
 
@@ -101,7 +103,7 @@ class Client:
         self.socket = socket
         self.uuid = uuid
         self.name = self.uuid
-        self.channels = [ "lobby" ]
+        self.channel = "lobby"
 
     def recvMessage(self):
         return self.socket.recv(defaults['bufsize'])

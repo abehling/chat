@@ -11,7 +11,6 @@ from select import select
 
 defaults = { 'bufsize': 4096 }
 
-
 class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
@@ -34,6 +33,8 @@ class Application(tk.Frame):
         self.connect_button.grid(column=1, row=0, sticky='E')
         self.scroll = scrolledtext.ScrolledText(self, width=80, height=25)
         self.scroll.grid(column=0, row=1, sticky='W')
+        self.userlist = tk.Listbox(self)
+        self.userlist.grid(column=1, row=1, sticky='NWES') 
         self.button = tk.Button(self, text='Send', command=self.sendMessage)
         self.button.grid(column=1, row=2, sticky='E')
         self.entry = tk.Entry(self, width=80, textvariable=self.message)
@@ -78,6 +79,11 @@ class Application(tk.Frame):
     def executeCommand(self, json_object):
         if json_object['command'] == "name" and 'error' not in json_object:
             self.scroll.insert(tk.END, "Name sucessfully changed to {}\n".format(json_object['data']))
+        elif json_object['command'] == "list":
+            self.userlist.delete(0, tk.END)
+            for chatbuddy in json_object['list']:
+                self.userlist.insert(tk.END, chatbuddy)
+            print(self.userlist.get(0, tk.END))
 
     def handleConnection(self):
         while self.running:
@@ -103,6 +109,7 @@ class Application(tk.Frame):
             self.server['state'] = tk.NORMAL
             self.connect_button['text'] = "Connect"
             self.socket = None
+            self.userlist.delete(0, tk.END)
             
 
 root = tk.Tk()
